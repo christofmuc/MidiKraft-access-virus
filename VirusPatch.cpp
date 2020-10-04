@@ -94,4 +94,9 @@ namespace midikraft {
 		return (boost::format("%c%d") % bankChar % progNo).str();
 	}
 
+	std::string VirusMultiModePart::name() const
+	{
+		return (boost::format("MultiMode Part %d") % (partNo_ + 1)).str();
+	}
+
 }

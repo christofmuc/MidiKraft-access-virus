@@ -8,6 +8,7 @@
 
 #include "Patch.h"
 #include "PatchNumber.h"
+#include "DataFileSendCapability.h"
 
 namespace midikraft {
 
@@ -15,6 +16,23 @@ namespace midikraft {
 	public:
 		using PatchNumber::PatchNumber;
 		virtual std::string friendlyName() const override;
+	};
+
+	class VirusSingleModeTarget : public SendTarget {
+	public:
+		std::string name() const { return "Single Mode Edit Buffer"; }
+	};
+
+	class VirusMultiModePart : public SendTarget {
+	public:
+		VirusMultiModePart(uint8 partNo) : partNo_(partNo) {};
+
+		std::string name() const override;
+
+		uint8 partNo() const { return partNo_;  }
+
+	private:
+		uint8 partNo_;
 	};
 
 	class VirusPatch : public Patch, public StoredPatchNameCapability {

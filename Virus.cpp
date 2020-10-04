@@ -308,6 +308,39 @@ namespace midikraft {
 		throw new std::runtime_error("Invalid call");
 	}
 
+	std::vector<std::shared_ptr<midikraft::SendTarget>> Virus::getSendTargetNameList() const
+	{
+		std::vector<std::shared_ptr<midikraft::SendTarget>> result;
+		result.push_back(std::make_shared <VirusSingleModeTarget>());
+		for (uint8 i = 0; i < 16; i++) {
+			result.push_back(std::make_shared<VirusMultiModePart>(i));
+		}
+		return result;
+	}
+
+	std::vector<juce::MidiMessage> Virus::dataFileToMessages(std::shared_ptr<DataFile> dataFile, std::shared_ptr<SendTarget> target) const
+	{
+		auto patch = std::dynamic_pointer_cast<Patch>(dataFile);
+		if (patch && (!target || std::dynamic_pointer_cast<VirusSingleModeTarget>(target))) {
+			// Special case for backward compatibility - this is an edit buffer
+			return patchToSysex(*patch);
+		}
+		auto multiTarget = std::dynamic_pointer_cast<VirusMultiModePart>(target);
+		if (multiTarget && dataFile) {
+			// Create a single program dump that targets one of the sixteen multi part slots!
+			std::vector<uint8> message({ 0x10 /* Single program dump */, 0x00 /* Edit Buffer */, multiTarget->partNo() /* Select which multi part program this should be */ });
+			std::copy(dataFile->data().begin(), dataFile->data().end(), std::back_inserter(message));
+			uint8 checksum = (MidiHelpers::checksum7bit(message) + deviceID_) & 0x7f;
+			message.push_back(checksum);
+			return std::vector<MidiMessage>({ createSysexMessage(message) });
+		}
+		else {
+			jassertfalse;
+			SimpleLogger::instance()->postMessage("Program error - invalid combination of DataFile and SendTarget given");
+			return {  };
+		}
+	}
+
 	MidiMessage Virus::createSysexMessage(std::vector<uint8> const &message) const {
 		jassert(deviceID_ >= 0 && deviceID_ < 0x80);
 		std::vector<uint8> messageFrame({ 0x00, 0x20, 0x33 /* Access Music */, 0x01 /* Virus */, deviceID_ });

@@ -11,10 +11,12 @@
 #include "ProgramDumpCapability.h"
 #include "BankDumpCapability.h"
 #include "SoundExpanderCapability.h"
+#include "DataFileSendCapability.h"
 
 namespace midikraft {
 
-	class Virus : public Synth, public SimpleDiscoverableDevice, public EditBufferCapability, public ProgramDumpCabability, public BankDumpCapability, public SoundExpanderCapability {
+	class Virus : public Synth, public SimpleDiscoverableDevice, public EditBufferCapability, public ProgramDumpCabability, 
+		public BankDumpCapability, public SoundExpanderCapability, public DataFileSendCapability, public MultipleSendTargetCapability {
 	public:
 		Virus();
 
@@ -62,6 +64,12 @@ namespace midikraft {
 		virtual bool hasMidiControl() const override;
 		virtual bool isMidiControlOn() const override;
 		virtual void setMidiControl(MidiController *controller, bool isOn) override;
+
+		// MultipleSendTargetCapability
+		virtual std::vector<std::shared_ptr<SendTarget>> getSendTargetNameList() const override;
+
+		// DataFileSendCapability
+		virtual std::vector<MidiMessage> dataFileToMessages(std::shared_ptr<DataFile> dataFile, std::shared_ptr<SendTarget> target) const override;
 
 	private:
 		MidiMessage createSysexMessage(std::vector<uint8> const &message) const;

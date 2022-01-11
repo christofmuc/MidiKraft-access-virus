@@ -172,9 +172,12 @@ namespace midikraft {
 
 	Synth::PatchData Virus::filterVoiceRelevantData(std::shared_ptr<DataFile> unfilteredData) const
 	{
+		// For backward compatibility, this function just returns the 256 bytes of bank data!
+		MidiMessage message(unfilteredData->data().data(), (int) unfilteredData->data().size());
+		auto usefulData = getPagesFromMessage(message, 8);
 		// Phew, the Virus has lots of unused data bytes that contribute nothing to the sound of the patch
 		// Just blank out those bytes
-		return Patch::blankOut(kVirusBlankOutZones, unfilteredData->data());
+		return DataFile::blankOut(kVirusBlankOutZones, usefulData);
 	}
 
 	int Virus::numberOfPatches() const
@@ -192,30 +195,46 @@ namespace midikraft {
 	std::shared_ptr<DataFile> Virus::patchFromSysex(const MidiMessage& message) const
 	{
 		if (isEditBufferDump(message) || isSingleProgramDump(message)) {
-			auto pages = getPagesFromMessage(message, 8);
-			if (pages.size() == 256) {
-				// That should be Page A and Page B from the manual
-				MidiProgramNumber place;
-				if (isSingleProgramDump(message)) {
-					place = getProgramNumber(message);
-				}
-				auto patch = std::make_shared<VirusPatch>(pages, place);
-				return patch;
-			}
+			Synth::PatchData pages(message.getRawData(), message.getRawData() + message.getRawDataSize());
+			auto patch = std::make_shared<VirusPatch>(pages);
+			return patch;
 		}
-		return std::shared_ptr<Patch>();
+		else {
+			SimpleLogger::instance()->postMessage("Error in Virus Access implementation - cannot create patch from data that is neither an edit buffer nor a single program dump");
+		}
+		return {};
 	}
 
 	std::shared_ptr<DataFile> Virus::patchFromPatchData(const Synth::PatchData &data, MidiProgramNumber place) const
 	{
-		auto patch = std::make_shared<VirusPatch>(data, place);
-		return patch;
+		if (data.size() == 256) {
+			// Migration of old Virus patches which were stored as only 256 bytes without the rest of the MidiMessage
+			// We will just reconstruct an edit buffer dump. Program place had been list on import and only stored
+			// in the import source json, which needs to be reconstructed elsewhere when making the PatchHolder!
+			ignoreUnused(place);
+			auto midiRepresentation = patchToSysex(std::make_shared<VirusPatch>(data));
+			return patchFromSysex(midiRepresentation[0]);
+		}
+		else {
+			// This is supposed to be a full MidiMessage, we can use it without changing anything
+			return std::make_shared<VirusPatch>(data);
+		}
 	}
 
 	std::vector<juce::MidiMessage> Virus::patchToSysex(std::shared_ptr<DataFile> patch) const
 	{
 		std::vector<uint8> message({ 0x10 /* Single program dump */, 0x00 /* Edit Buffer */, 0x40 /* Single Buffer */ });
-		std::copy(patch->data().begin(), patch->data().end(), std::back_inserter(message));
+
+		if (patch->data().size() == 256) {
+			// Old version - only 256 bytes are stored in the database, we construct a completely fresh single edit buffer MIDI message from this!
+			std::copy(patch->data().begin(), patch->data().end(), std::back_inserter(message));
+		}
+		else {
+			// Copy the 256 useful bytes from the MidiMessage
+			MidiMessage messageFromDatabase(patch->data().data(), (int) patch->data().size());
+			auto pages = getPagesFromMessage(messageFromDatabase, 8);
+			std::copy(pages.cbegin(), pages.cend(), std::back_inserter(message));
+		}
 		uint8 checksum = (MidiHelpers::checksum7bit(message) + deviceID_) & 0x7f;
 		message.push_back(checksum);
 		return std::vector<MidiMessage>({ createSysexMessage(message) });

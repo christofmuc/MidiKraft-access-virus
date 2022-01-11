@@ -40,9 +40,8 @@ namespace midikraft {
 	}
 
 
-	VirusPatch::VirusPatch(Synth::PatchData const &data, MidiProgramNumber place) : Patch(PATCH_VIRUS_B, data), place_(place)
+	VirusPatch::VirusPatch(Synth::PatchData const &data) : DataFile(PATCH_VIRUS_B, data)
 	{
-		jassert(data.size() == 256);
 	}
 
 	std::string VirusPatch::name() const
@@ -68,20 +67,39 @@ namespace midikraft {
 		//TODO
 	}
 
-	bool VirusPatch::isDefaultName(std::string const &patchName) const
+	bool VirusPatch::hasStoredPatchNumber() const
+	{
+		// The Virus has a stored patch number if the bank is not 0 (which would be an edit buffer dump)
+		return data().at(7) != 0;
+	}
+
+	MidiProgramNumber VirusPatch::getStoredPatchNumber() const
+	{
+		uint8 bank = data().at(7);
+		if (bank == 0) {
+			//TODO need to invent InvalidMidiProgramNumber
+			return MidiProgramNumber::fromZeroBase(0);
+		}
+		bank -= 1; // bank is 1-based, but in case of edit buffer this will be 0 already
+		uint8 program = data().at(8);
+		return MidiProgramNumber::fromZeroBase(bank * 128 + program);
+	}
+
+	void VirusPatch::setStoredPatchNumber(MidiProgramNumber newNumber) const
+	{
+		ignoreUnused(newNumber);
+		SimpleLogger::instance()->postMessage("Warning - changing the stored program number of an Access Virus patch is not implemented yet!");
+	}
+
+	bool VirusPatch::isDefaultName(std::string const& patchName) const
 	{
 		return patchName == "- Init -";
 	}
 
-	MidiProgramNumber VirusPatch::patchNumber() const
-	{
-		return place_;
-	}
-
 	int VirusPatch::index(Page page, int index)
 	{
-		// We have stored the A and the B pages in one vector
-		return page * 128 + index;
+		// We have stored the A and the B pages in one vector, starting at index 9
+		return page * 128 + index + 9;
 	}
 
 	int VirusPatch::getNumTagsStored() const
